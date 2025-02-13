@@ -26,5 +26,8 @@
     <ClInclude Include="permidxs8.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="bipartition.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

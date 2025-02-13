@@ -104,6 +104,9 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -130,6 +133,7 @@
     <ClCompile Include="AVXQuicksort.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bipartition.h" />
     <ClInclude Include="genpermidxs.h" />
     <ClInclude Include="permidxs8.h" />
   </ItemGroup>

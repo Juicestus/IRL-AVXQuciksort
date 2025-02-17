@@ -29,5 +29,16 @@
     <ClInclude Include="bipartition.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="competitor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="help.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="ll.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

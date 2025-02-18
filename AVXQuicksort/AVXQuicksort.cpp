@@ -36,20 +36,33 @@
     int* src = new int[sz], * dst = new int[sz];        \
     for (int i = 0; i < sz; i++) src[i] = rand() % 100; \
     help::arrprint("input", src, sz);                   \
-    auto ipivs = FCALL;                                 \
+    auto pivot = FCALL;                                 \
     RESULTS                                             \
 }
 
 int main(int argc, char** argv)
 {
-    //BENCHMARK(simple_4pivot_i32x8(dst, src, sz, INT32_MAX / 4, INT32_MAX / 2, 3 * INT32_MAX / 4));
+#define benchmark_8partition
+
+#ifdef benchmark_bipartition    // ~13.5 b ints/s
+    BENCHMARK(simple_bipartition_i32x8(dst, src, sz, INT32_MAX / 2));
+#endif
+   
+#ifdef benchmark_4partition     //  ~6.5 b ints/s
+    BENCHMARK(simple_4partition_i32x8(dst, src, sz, std::make_tuple(       
+        INT32_MAX / 4, INT32_MAX / 2, 3 * INT32_MAX / 4)));
+#endif
+   
+#ifdef benchmark_8partition     //  ~3.3 b ints/s
+    BENCHMARK(simple_8partition_i32x8(dst, src, sz, std::make_tuple(
+        INT32_MAX / 8,          // 1/8 
+        INT32_MAX / 4,          // 2/8 = 1/4
+        3 * INT32_MAX / 8,      // 3/8
+        INT32_MAX / 2,          // 4/8 = 2/4 = 1/2
+        5 * INT32_MAX / 8,      // 5/8
+        3 * INT32_MAX / 4,      // 6/8 = 3/4
+        7 * INT32_MAX / 8       // 7/8 
+    )));
+#endif
     
-    DEMO(simple_4pivot_i32x8(dst, src, sz, 25, 50, 75), {
-            help::arrprint("final", src, sz);
-            std::cout << std::get<0>(ipivs) << " "
-                      << std::get<1>(ipivs) << " "
-                      << std::get<2>(ipivs) << "\n";
-        });
-
-
 }

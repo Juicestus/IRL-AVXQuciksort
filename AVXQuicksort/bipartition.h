@@ -5,10 +5,10 @@
 #include <smmintrin.h>
 #include <immintrin.h> 
 #include <tuple>
+#include <vector>
 
 #include "help.h"
 #include "permidxs8.h"
-
 
 //size_t simple_bipivot_i32x8_raw()
 
@@ -29,8 +29,11 @@
 //  
 //  #1 and #2 end up performing the same. #1 is implemented.
 
-// reverse stable. write documentation for this function
-__forceinline size_t simple_bipivot_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int32_t p)
+/// Simple bipartition (1 pivot).
+/// Input in *src with length sz, result stored in *dst,
+/// returns index that marks the partition.
+/// 
+__forceinline size_t simple_bipartition_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int32_t p)
 {
     __m256i pivot = _mm256_set1_epi32(p);
     int32_t* l = dst, * r = dst + sz;
@@ -57,7 +60,7 @@ __forceinline size_t simple_bipivot_i32x8(int32_t*  dst, int32_t*  src, size_t s
     }
 
     // handle leftover:
-    for (int* sk = end; sk != end + rem; sk++)
+    for (int32_t* sk = end; sk != end + rem; sk++)
     {
         if (*sk <= p)   *(l++) = *sk;
         else            *(--r) = *sk;
@@ -65,29 +68,47 @@ __forceinline size_t simple_bipivot_i32x8(int32_t*  dst, int32_t*  src, size_t s
     return l - dst;
 }
 
-__forceinline std::tuple<size_t, size_t, size_t> simple_4pivot_i32x8(int32_t* dst, int32_t* src, size_t sz, int32_t p1, int32_t p2, int32_t p3)
+template<typename T>    using tuple3 = std::tuple<T, T, T>;
+template<typename T>    using tuple7 = std::tuple<T, T, T, T, T, T, T>;
+
+__forceinline tuple3<size_t> simple_4partition_i32x8(int32_t* dst, int32_t* src, size_t sz, tuple3<int32_t> pivs)
 {
-    // currently assuming sz % 8 == 0 (fuck!)
+    size_t p_ctr = simple_bipartition_i32x8(dst, src, sz, std::get<1>(pivs));
+    size_t p_left = simple_bipartition_i32x8(src, dst, p_ctr, std::get<0>(pivs));
+    size_t p_right = simple_bipartition_i32x8(src+p_ctr, dst+p_ctr, sz-p_ctr, std::get<2>(pivs)) + p_ctr;
+
+    return std::make_tuple(p_left, p_ctr, p_right);
+}
+
+__forceinline tuple7<size_t> simple_8partition_i32x8(int32_t* dst, int32_t* src, size_t sz, tuple7<int32_t> pivs)
+{
+    // pi# = pivot index (size_t)    piv# = pivot (int32_t)
+
+    int32_t piv0, piv1, piv2, piv3, piv4, piv5, piv6;
+    std::tie(piv0, piv1, piv2, piv3, piv4, piv5, piv6) = pivs;
+
+    size_t pi1, pi3, pi5;
+    std::tie(pi1, pi3, pi5) = simple_4partition_i32x8(dst, src, sz, std::make_tuple(piv1, piv3, piv5));
     
-    size_t i2 = simple_bipivot_i32x8(dst, src, sz, p2);
-    size_t i1 = simple_bipivot_i32x8(src, dst, i2, p1);
-    size_t i3 = simple_bipivot_i32x8(src+i2, dst+i2, sz-i2, p3);
+    size_t pi0 = simple_bipartition_i32x8(dst, src, pi1, piv0);
+    size_t pi2 = simple_bipartition_i32x8(dst+pi1, src+pi1, pi3-pi1, piv2);
+    size_t pi4 = simple_bipartition_i32x8(dst+pi1, src+pi3, pi5-pi3, piv4);
+    size_t pi6 = simple_bipartition_i32x8(dst+pi1, src+pi3, sz-pi5, piv6);
     
-    return std::make_tuple(i1, i2, i3+i2);
+    return std::make_tuple(pi0, pi1, pi2, pi3, pi4, pi5, pi6);
 }
 
 /// Two pointers 
 /// 
-size_t twoptr_inplace_bipivot_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int32_t p)
+size_t twoptr_bipartition_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int32_t p)
 {
-    // currently assuming sz % 8 == 0
-
+    memset(dst, 0, sz);
     __m256i pivot = _mm256_set1_epi32(p);
 
     int32_t* src_l = src, * src_r = src + sz - 8;
     int32_t* dst_l = dst, * dst_r = dst + sz;
     
-    while (src_l < src_r)
+    while (src_r-src_l > 16)
     {
         __m256i window_l = _mm256_loadu_epi32(src_l);
         __m256i window_r = _mm256_loadu_epi32(src_r);
@@ -123,6 +144,17 @@ size_t twoptr_inplace_bipivot_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int
         _mm256_storeu_epi32(dst_r, shuffled_r);
         dst_r += k_r;
     }
+    
+    // handle leftover:
+    std::cout << "leftover: " << dst_l-dst << " " << dst_r-dst << " ";
+    while (src_l < src_r)
+    {
+        std::cout << *src_l << " ";
+        if (*src_l <= p)    *(dst_l++) = *src_l;
+        else                *(--dst_r) = *src_l;
+        src_l++;
+    }
+    std::cout << "\n";
     return dst_l - dst;
 }
 

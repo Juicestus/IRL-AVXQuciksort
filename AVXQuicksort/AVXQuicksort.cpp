@@ -10,10 +10,9 @@
 
 #include "help.h"
 #include "generate.h"
-
-#include "lookup.h"
-#include "bipartition.h"
-#include "competitor.h"
+#include "partition.h"
+//#include "competitor.h"
+#include "bucket.h"
 
 //extern "C" uint64_t power(uint64_t n, uint64_t p);
 // [DO NOT CALL RN] extern "C" size_t simple_bipivot_i32x8_ll(int32_t* dst, int32_t* src, size_t sz, int32_t p);
@@ -44,7 +43,7 @@
 int main(int argc, char** argv)
 {
 
-#define benchmark_bipartition
+//#define benchmark_bipartition
 
 #ifdef benchmark_bipartition    // ~13.5 b ints/s
     BENCHMARK(simple_bipartition_i32x8(dst, src, sz, INT32_MAX / 2));
@@ -66,5 +65,7 @@ int main(int argc, char** argv)
         7 * INT32_MAX / 8       // 7/8 
     )));
 #endif
+
+    benchmark_bucket();
     
 }

@@ -42,7 +42,7 @@
 
 int main(int argc, char** argv)
 {
-#define benchmark_8partition
+#define benchmark_bipartition
 
 #ifdef benchmark_bipartition    // ~13.5 b ints/s
     BENCHMARK(simple_bipartition_i32x8(dst, src, sz, INT32_MAX / 2));

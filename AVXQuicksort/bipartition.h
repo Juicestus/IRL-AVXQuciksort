@@ -98,63 +98,7 @@ __forceinline tuple7<size_t> simple_8partition_i32x8(int32_t* dst, int32_t* src,
     return std::make_tuple(pi0, pi1, pi2, pi3, pi4, pi5, pi6);
 }
 
-/// Two pointers 
-/// 
+/*
 size_t twoptr_bipartition_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int32_t p)
-{
-    memset(dst, 0, sz);
-    __m256i pivot = _mm256_set1_epi32(p);
 
-    int32_t* src_l = src, * src_r = src + sz - 8;
-    int32_t* dst_l = dst, * dst_r = dst + sz;
-    
-    while (src_r-src_l > 16)
-    {
-        __m256i window_l = _mm256_loadu_epi32(src_l);
-        __m256i window_r = _mm256_loadu_epi32(src_r);
-
-        src_l += 8;
-        src_r -= 8;
-
-        __m256i cmpres_l = _mm256_cmpgt_epi32(pivot, window_l);
-        __m256i cmpres_r = _mm256_cmpgt_epi32(pivot, window_r);
-
-        uint16_t mask_l = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres_l));
-        uint16_t mask_r = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres_r));
-
-        __m256i idxs_l = permidxs8[mask_l];
-        __m256i idxs_r = permidxs8[mask_r];
-
-        __m256i shuffled_l = _mm256_permutevar8x32_epi32(window_l, idxs_l);
-        __m256i shuffled_r = _mm256_permutevar8x32_epi32(window_r, idxs_r);
-    
-        uint8_t k_l = __popcnt(mask_l);
-        uint8_t k_r = __popcnt(mask_r);
-
-        // try rearanging these 
-        _mm256_storeu_epi32(dst_l, shuffled_l);  
-        dst_l += k_l;
-        dst_r -= 8;
-        _mm256_storeu_epi32(dst_r, shuffled_l);
-        dst_r += k_l;
-
-        _mm256_storeu_epi32(dst_l, shuffled_r);  
-        dst_l += k_r;
-        dst_r -= 8;
-        _mm256_storeu_epi32(dst_r, shuffled_r);
-        dst_r += k_r;
-    }
-    
-    // handle leftover:
-    std::cout << "leftover: " << dst_l-dst << " " << dst_r-dst << " ";
-    while (src_l < src_r)
-    {
-        std::cout << *src_l << " ";
-        if (*src_l <= p)    *(dst_l++) = *src_l;
-        else                *(--dst_r) = *src_l;
-        src_l++;
-    }
-    std::cout << "\n";
-    return dst_l - dst;
-}
-
+*/

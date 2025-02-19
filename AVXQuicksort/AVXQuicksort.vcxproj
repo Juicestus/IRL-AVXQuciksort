@@ -140,9 +140,9 @@
   <ItemGroup>
     <ClInclude Include="bipartition.h" />
     <ClInclude Include="competitor.h" />
-    <ClInclude Include="genpermidxs.h" />
+    <ClInclude Include="generate.h" />
     <ClInclude Include="help.h" />
-    <ClInclude Include="permidxs8.h" />
+    <ClInclude Include="lookup.h" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="ll.asm" />

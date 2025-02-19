@@ -20,10 +20,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="genpermidxs.h">
+    <ClInclude Include="generate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="permidxs8.h">
+    <ClInclude Include="lookup.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="bipartition.h">

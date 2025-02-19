@@ -7,8 +7,12 @@
 #include <smmintrin.h>
 #include <immintrin.h>
 
-
-
+/// 
+/// Generate the permutation index register from
+/// an 8 bit mask. This function is not perfectly
+/// efficient, and even if it was it is always
+/// better to precompute into a lookup table.
+/// 
 __m256i permidx8(uint8_t mask)
 {
     uint32_t a = 0, b = 7;
@@ -21,20 +25,32 @@ __m256i permidx8(uint8_t mask)
 }
 
 ///
-/// Creates a header file "permidxs8.h" which contains the mapping 
-/// of masks -> permutations for 8 bit registers using mm setr.
-///
-/// This function is kind of a mess -- probably would've been better
-/// to be a Python script... oh well
+/// Creates a header file "lookup.h" which contains 
+/// various useful lookuptables.
 /// 
-void dump_permidxs_mask8()
+/// (1) mapping of 8 bit masks -> precomputed permutation indexes
+/// (2) mapping of 8 bit masks -> precomputed popcnt
+/// 
+/// NOTE: ik this function is kind of a mess -- probably would've 
+/// been better to be a Python script... oh well
+/// 
+void generate_lookuptable()
 {
     const size_t size = (1 << 8);
 
-    std::ofstream fs("permidxs8.h");
+    std::ofstream fs("lookup.h");
     fs << "#pragma once\n\n";
     fs << "#include <smmintrin.h>\n";
     fs << "#include <immintrin.h>\n";
+
+    fs << "\nstatic const uint8_t popcnts8[" << size << "] = {\n";
+    for (size_t i = 0; i < size; i++)
+    {
+        fs << "    " << __popcnt(i & 0b11111111) << ",";
+        if ((i + 1) % 8 == 0) fs << "\n";
+    }
+    fs << "};\n\n";
+
     fs << "\nstatic const __m256i permidxs8[" << size << "] = {\n";
 
     size_t i, j, a, b, k;
@@ -56,6 +72,7 @@ void dump_permidxs_mask8()
 
     }
     fs << "};\n\n";
+    std::cout << "Done!";
 }
 
 

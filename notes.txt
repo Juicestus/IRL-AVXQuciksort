@@ -1,0 +1,57 @@
+re. __popcnt vs lookuptable
+
+	It looks like the lookup table might perform slightly better,
+	as the MAXIMUM speed was faster.
+
+		MAX speed __popcnt		13.5 b int/s
+		MAX speed lookuptable	14.5 b int/s
+
+
+re. size of little-n:
+
+	i7-14700 has the following cache specs:
+
+		Cache L1:	80 KB (per core)
+		Cache L2:	2 MB (per core)
+		Cache L3:	33 MB (shared)
+		E-Core L1:	96 KB (per core)
+		E-Core L2:	4 MB (per module)
+
+	The mask lookup table is constant size 256 * 256 = 65536
+
+	The cache used is 2 * buffer + mask lookup. Well define it
+	C(n) = 4n + 4n + 65536
+
+		n			C(n)		performance (X is baseline)
+		2^10		73728		~X
+		2^11	 	81920		~X
+		2^12	 	98304		~X	<-- last good performance
+		2^13	 	131072		< X/2
+		2^14 		196608		< X/4
+
+	This is quite weird. My next thought is that maybe only
+	the destination buffer has to go in cache. The new cache
+	equation will be defined as
+	D(n) = 4n + 65536
+
+		n			C(n)		D(n)		performance (X is baseline)
+		2^10		73728		69632		~X
+		2^11	 	81920		73728		~X
+		2^12	 	98304		81920		~X	<-- last good performance
+		2^13	 	131072		98304		< X/2
+		2^14 		196608		131072		< X/4
+
+	At the largest n where the performance is still good:
+		
+		C(n) is	far above Cache L1 (80KB), and slightly above E-Core L1 (96KB)
+		D(n) is far slightly above Cache L1, and well under E-Core L1.
+
+	This leaves me with two questions:
+		
+		(1) Is being slightly above cache size is ok for performance?
+		(2) 
+
+
+
+
+	

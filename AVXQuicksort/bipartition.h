@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "help.h"
-#include "permidxs8.h"
+#include "lookup.h"
 
 //size_t simple_bipivot_i32x8_raw()
 
@@ -49,7 +49,8 @@ __forceinline size_t simple_bipartition_i32x8(int32_t*  dst, int32_t*  src, size
 
         __m256i idxs = permidxs8[mask];
         __m256i shuffled = _mm256_permutevar8x32_epi32(window, idxs);
-        uint8_t k = __popcnt(mask);
+        //uint8_t k = __popcnt(mask);
+        uint8_t k = popcnts8[mask];
     
         _mm256_storeu_epi32(l, shuffled);  
         l += k;

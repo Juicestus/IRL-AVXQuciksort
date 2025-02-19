@@ -9,8 +9,9 @@
 #include <immintrin.h> 
 
 #include "help.h"
-#include "genpermidxs.h"
-#include "permidxs8.h"
+#include "generate.h"
+
+#include "lookup.h"
 #include "bipartition.h"
 #include "competitor.h"
 
@@ -42,6 +43,7 @@
 
 int main(int argc, char** argv)
 {
+
 #define benchmark_bipartition
 
 #ifdef benchmark_bipartition    // ~13.5 b ints/s

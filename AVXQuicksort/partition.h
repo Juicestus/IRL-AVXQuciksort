@@ -44,9 +44,6 @@ template<typename T>    using tuple8 = std::tuple<T, T, T, T, T, T, T, T>;
 /// Input in *src with length sz, result stored in *dst,
 /// returns index that marks the partition.
 /// 
-/// NOTE: could this function be implemented
-/// as a composition of *_2dst? -- probably.
-/// 
 __forceinline size_t legacy_bipartition_i32x8(int32_t* dst, int32_t* src, size_t sz, size_t p)
 {
     __m256i pivot = _mm256_set1_epi32(p);
@@ -82,18 +79,14 @@ __forceinline size_t legacy_bipartition_i32x8(int32_t* dst, int32_t* src, size_t
     return l - dst;
 }
 
-/// NOTE: Cleanup pivot vs p etc.
 
 /// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
-/// 
-/// Pivot must be passed in both size 8 register pivot and int32 p.
-/// 
+/// Pivot must be passed into piv (as scalar) and piv_vec (as vector).
 /// Less than partition is written into *dst_l in left to right order.
 /// Greated than partition is written into *dst_r in right to left order.
-/// 
-__forceinline tuple2<size_t> simple_bipartition_2dst_i32x8(int32_t* dst_l, int32_t* dst_r, int32_t* src, size_t sz, __m256i pivot, int32_t p)
+__forceinline size_t bipartition_2dst_i32x8(int32_t* src, size_t sz, int32_t piv, __m256i piv_vec, int32_t* dst_l, int32_t* dst_r)
 {
-    int32_t* l = dst_l, * r = dst_l+sz;
+    int32_t* l = dst_l, * r = dst_r;
     size_t rem = sz % 8;
     int32_t* end = src + (sz - rem);
 
@@ -101,7 +94,7 @@ __forceinline tuple2<size_t> simple_bipartition_2dst_i32x8(int32_t* dst_l, int32
     {
         __m256i window = _mm256_loadu_epi32(sk);
 
-        __m256i cmpres = _mm256_cmpgt_epi32(pivot, window);
+        __m256i cmpres = _mm256_cmpgt_epi32(piv_vec, window);
         uint16_t mask = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres));
 
         __m256i idxs = permidxs8[mask];
@@ -119,49 +112,37 @@ __forceinline tuple2<size_t> simple_bipartition_2dst_i32x8(int32_t* dst_l, int32
     // handle leftover:
     for (int32_t* sk = end; sk != end + rem; sk++)
     {
-        if (*sk <= p)   *(l++) = *sk;
+        if (*sk <= piv) *(l++) = *sk;
         else            *(r--) = *sk;
     }
     
-    // how much have the pointers traveled (k_l, k_r):
-    return std::make_tuple(l - dst_l, dst_r - r); 
+    // how much have the left pointer has traveled (kl)
+    // the right pointer will always travel sz-k
+    return l - dst_l;       
 }
 
-/// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
-/// Result stored in *dst, partition given by a filled register pivot.
-/// Returns index that marks the partition.
-/// 
-__forceinline size_t simple_bipartition_1dst_i32x8(int32_t* dst, int32_t* src, size_t sz, __m256i pivot, int32_t p)
+__forceinline size_t simple_bipartition_1dst_i32x8(int32_t* src, size_t sz, int32_t piv, __m256i piv_vec, int32_t* dst)
 {
-    size_t __dectie(kl, kr) = simple_bipartition_2dst_i32x8(dst, dst + sz, src, sz, pivot, p);
-    return kl;      // kr is sexplicitly unused.
+    return bipartition_2dst_i32x8(src, sz, piv, piv_vec, dst, dst+sz);
 }
 
-/// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
-/// Result stored in *dst, partition given by pivot.
-/// Returns index that marks the partition.
-/// 
-__forceinline size_t simple_bipartition_1dst_i32x8(int32_t* dst, int32_t* src, size_t sz, int32_t pivot)
+__forceinline size_t simple_bipartition_1dst_i32x8(int32_t* src, size_t sz, int32_t piv, int32_t* dst)
 {
-    return simple_bipartition_1dst_i32x8(dst, src, sz, _mm256_set1_epi32(pivot), pivot);
+    return simple_bipartition_1dst_i32x8(src, sz, piv, _mm256_set1_epi32(piv), dst);
 }
-
 
 __forceinline tuple3<size_t> simple_4partition_i32x8(int32_t* dst, int32_t* src, size_t sz, tuple3<int32_t> pivs)
 {
-    size_t p_ctr = simple_bipartition_1dst_i32x8(dst, src, sz, std::get<1>(pivs));
-    size_t p_left = simple_bipartition_1dst_i32x8(src, dst, p_ctr, std::get<0>(pivs));
-    size_t p_right = simple_bipartition_1dst_i32x8(src+p_ctr, dst+p_ctr, sz-p_ctr, std::get<2>(pivs)) + p_ctr;
+    size_t p_ctr = simple_bipartition_1dst_i32x8(src, sz, std::get<1>(pivs), dst);
+    size_t p_left = simple_bipartition_1dst_i32x8(dst, p_ctr, std::get<0>(pivs), dst);
+    size_t p_right = simple_bipartition_1dst_i32x8(dst+p_ctr, sz-p_ctr, std::get<2>(pivs), src+p_ctr) + p_ctr;
 
     return std::make_tuple(p_left, p_ctr, p_right);
 }
 
-__forceinline tuple7<size_t> simple_8partition_i32x8(int32_t* dst, int32_t* src, size_t sz, tuple7<int32_t> pivs)
+/*__forceinline tuple7<size_t> simple_8partition_i32x8(int32_t* dst, int32_t* src, size_t sz, tuple7<int32_t> pivs)
 {
     // pi# = pivot index (size_t)    piv# = pivot (int32_t)
-
-  /*  int32_t piv0, piv1, piv2, piv3, piv4, piv5, piv6;
-    std::tie(piv0, piv1, piv2, piv3, piv4, piv5, piv6) = pivs;*/
 
     int32_t __dectie(piv0, piv1, piv2, piv3, piv4, piv5, piv6) = pivs;
 
@@ -174,7 +155,7 @@ __forceinline tuple7<size_t> simple_8partition_i32x8(int32_t* dst, int32_t* src,
     size_t pi6 = simple_bipartition_1dst_i32x8(dst+pi1, src+pi3, sz-pi5, piv6);
     
     return std::make_tuple(pi0, pi1, pi2, pi3, pi4, pi5, pi6);
-}
+}*/
 
 /*
 size_t twoptr_bipartition_i32x8(int32_t*  dst, int32_t*  src, size_t sz, int32_t p)

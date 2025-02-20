@@ -115,6 +115,10 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         // 4 way partition  bf --> src
         size_t k_left = bipartition_1_i32x8(src, bf, k_ctr, p1, pv1);
         size_t k_right = bipartition_1_i32x8(src + k_ctr, bf + k_ctr, chunk_sz - k_ctr, p5, pv5) + k_ctr;
+
+        help::arrprint("4way", src, chunk_sz);
+
+        std::cout << k_left << " " << k_ctr << " " << k_right << "\n";
         
         // 8 way partition  src --> bkts
         bipartition_2_i32x8(bkts.b0.end, bkts.b1.begin, src, k_left, p0, pv0);

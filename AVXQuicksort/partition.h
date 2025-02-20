@@ -63,8 +63,7 @@ __forceinline size_t legacy_bipartition_i32x8(int32_t* dst, int32_t* src, size_t
 
         __m256i idxs = permidxs8[mask];
         __m256i shuffled = _mm256_permutevar8x32_epi32(window, idxs);
-        //uint8_t k = __popcnt(mask);
-        uint8_t k = popcnts8[mask];
+        uint8_t k = popcnts8[mask];     // lookup table for __popcnt(mask), slightly faster.
     
         _mm256_storeu_epi32(l, shuffled);  
         l += k;
@@ -107,10 +106,7 @@ __forceinline tuple2<size_t> simple_bipartition_2dst_i32x8(int32_t* dst_l, int32
 
         __m256i idxs = permidxs8[mask];
         __m256i shuffled = _mm256_permutevar8x32_epi32(window, idxs);
-        uint8_t k = __popcnt(mask);
-        //uint8_t k = popcnts8[mask];
-
-        //std::cout << (sk - src)/8 << " " << (l - dst_l)/8 <<  " " << (dst_r - r)/8 << " " << (r - dst_l)/8 << "\n";
+        uint8_t k = popcnts8[mask];     // lookup table for __popcnt(mask), slightly faster.
 
         _mm256_storeu_epi32(l, shuffled);  
         l += k;

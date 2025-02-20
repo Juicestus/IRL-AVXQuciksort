@@ -11,3 +11,5 @@ Reach out to Justus at <justus@tamu.edu> or <jus@justusl.com>.
 | simple_bipartition_i32x8 | ~13.5 b ints/s | 
 | simple_4partition_i32x8 | ~6.5 b ints/s |
 | simple_8partition_i32x8 | ~3.3 b ints/s |
+
+test remote

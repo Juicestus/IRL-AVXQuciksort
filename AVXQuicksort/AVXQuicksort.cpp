@@ -43,19 +43,20 @@
 int main(int argc, char** argv)
 {
 
-//#define benchmark_bipartition
-
-#ifdef benchmark_bipartition    // ~13.5 b ints/s
-    BENCHMARK(simple_bipartition_i32x8(dst, src, sz, INT32_MAX / 2));
-#endif
+    // ~13.5 b ints/s
+    // 
+    // 6.9:
+    //BENCHMARK(simple_bipartition_1dst_i32x8(dst, src, sz, INT32_MAX / 2));
+    //BENCHMARK(simple_bipartition_2dst_i32x8(dst, dst+sz, src, sz, _mm256_set1_epi32(INT32_MAX / 2), INT32_MAX / 2));
+    // 
+    // 7.4:
+    //BENCHMARK(legacy_bipartition_i32x8(dst, src, sz, INT32_MAX / 2));
    
-#ifdef benchmark_4partition     //  ~6.5 b ints/s
-    BENCHMARK(simple_4partition_i32x8(dst, src, sz, std::make_tuple(       
-        INT32_MAX / 4, INT32_MAX / 2, 3 * INT32_MAX / 4)));
-#endif
+    //  ~6.5 b ints/s
+    //BENCHMARK(simple_4partition_i32x8(dst, src, sz, std::make_tuple(INT32_MAX / 4, INT32_MAX / 2, 3 * INT32_MAX / 4)));
    
-#ifdef benchmark_8partition     //  ~3.3 b ints/s
-    BENCHMARK(simple_8partition_i32x8(dst, src, sz, std::make_tuple(
+    //  ~3.3 b ints/s
+    /*BENCHMARK(simple_8partition_i32x8(dst, src, sz, std::make_tuple(
         INT32_MAX / 8,          // 1/8 
         INT32_MAX / 4,          // 2/8 = 1/4
         3 * INT32_MAX / 8,      // 3/8
@@ -63,9 +64,6 @@ int main(int argc, char** argv)
         5 * INT32_MAX / 8,      // 5/8
         3 * INT32_MAX / 4,      // 6/8 = 3/4
         7 * INT32_MAX / 8       // 7/8 
-    )));
-#endif
+    )));*/
 
-    benchmark_bucket();
-    
 }

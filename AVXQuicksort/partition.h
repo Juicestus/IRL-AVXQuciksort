@@ -134,7 +134,7 @@ __forceinline size_t simple_bipartition_1dst_i32x8(int32_t* src, size_t sz, int3
 __forceinline tuple3<size_t> simple_4partition_i32x8(int32_t* dst, int32_t* src, size_t sz, tuple3<int32_t> pivs)
 {
     size_t p_ctr = simple_bipartition_1dst_i32x8(src, sz, std::get<1>(pivs), dst);
-    size_t p_left = simple_bipartition_1dst_i32x8(dst, p_ctr, std::get<0>(pivs), dst);
+    size_t p_left = simple_bipartition_1dst_i32x8(dst, p_ctr, std::get<0>(pivs), src);
     size_t p_right = simple_bipartition_1dst_i32x8(dst+p_ctr, sz-p_ctr, std::get<2>(pivs), src+p_ctr) + p_ctr;
 
     return std::make_tuple(p_left, p_ctr, p_right);

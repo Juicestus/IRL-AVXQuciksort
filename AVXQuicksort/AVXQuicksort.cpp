@@ -10,7 +10,6 @@
 
 #include "help.h"
 #include "generate.h"
-#include "partition.h"
 //#include "competitor.h"
 #include "bucket.h"
 
@@ -45,6 +44,7 @@ int main(int argc, char** argv)
 
     // 13.5 (7.4) b ints/s
 
-    benchmark_buckets();
+    benchmark_buckets(70);
 
+    return 0;
 }

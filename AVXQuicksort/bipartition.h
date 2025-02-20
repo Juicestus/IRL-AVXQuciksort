@@ -79,7 +79,6 @@ __forceinline size_t legacy_bipartition_i32x8(int32_t* dst, int32_t* src, size_t
     return l - dst;
 }
 
-
 /// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
 /// Pivot must be passed into piv (as scalar) and piv_vec (as vector).
 /// Less than partition is written into *dst_l in left to right order.
@@ -152,7 +151,7 @@ __forceinline tuple3<size_t> simple_4partition_i32x8(int32_t* dst, int32_t* src,
     size_t pi0 = simple_bipartition_1dst_i32x8(dst, src, pi1, piv0);
     size_t pi2 = simple_bipartition_1dst_i32x8(dst+pi1, src+pi1, pi3-pi1, piv2);
     size_t pi4 = simple_bipartition_1dst_i32x8(dst+pi1, src+pi3, pi5-pi3, piv4);
-    size_t pi6 = simple_bipartition_1dst_i32x8(dst+pi1, src+pi3, sz-pi5, piv6);
+    size_t pi6 = simple_bipartition_1dst_i32x8(dst+pi1, src+pi5, sz-pi5, piv6);
     
     return std::make_tuple(pi0, pi1, pi2, pi3, pi4, pi5, pi6);
 }*/

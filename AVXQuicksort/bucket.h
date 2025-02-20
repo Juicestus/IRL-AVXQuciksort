@@ -1,6 +1,6 @@
 #pragma once
 
-#include "partition.h"
+#include "lookup.h"
 
 #include <cstdint>
 #include <intrin.h>
@@ -13,7 +13,7 @@
 /// Pivot must be passed into piv (as scalar) and piv_vec (as vector).
 /// Less than partition is written into *dst_l in left to right order.
 /// Greated than partition is written into *dst_r in right to left order.
-__forceinline void bipartition_2dst_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
+__forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
 {
     size_t rem = sz % 8;
     int32_t* end = src + (sz - rem);
@@ -45,26 +45,59 @@ __forceinline void bipartition_2dst_i32x8(int32_t*& dst_l, int32_t*& dst_r, int3
     }
 }
 
-__forceinline size_t bipartition_1dst_i32x8(int32_t* dst, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
+__forceinline size_t bipartition_1_i32x8(int32_t* dst, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
 {
     int32_t* dst_l = dst, * dst_r = dst + sz;
-    bipartition_2dst_i32x8(dst_l, dst_r, src, sz, piv, piv_vec);
+    bipartition_2_i32x8(dst_l, dst_r, src, sz, piv, piv_vec);
     return dst_l - dst;
 }
 
-#define CHUNK_SZ 4096   // 2^12
+struct Bucket {
+    int32_t* begin;
+    int32_t* end;
 
-/// Performs 8-way partition on the array beginning at
-/// by *src with size sz, around the pivot piv.
+    __forceinline size_t size() { return end - begin; }
+    __forceinline void str() 
+    {
+        std::cout << " [ ";
+        for (int32_t* k = begin; k != end; k++)
+            std::cout << *k << " ";
+        std::cout << "]\n";
+    }
+};
+
+struct Buckets {
+    Bucket b0;
+    Bucket b1;
+    Bucket b2;
+    Bucket b3;
+    Bucket b4;
+    Bucket b5;
+    Bucket b6;
+    Bucket b7;
+};
+
+enum bucket_alignment { BTK_ALIGN_LEFT, BTK_ALIGN_RIGHT };
+
+__forceinline Bucket create_bucket(size_t sz, bucket_alignment align)
+{
+    Bucket b{};
+    b.begin = new int32_t[sz]{ 0 } + align * sz;
+    b.end = b.begin;
+    return b;
+}
+
+/// Performs 8-way partition on the array beginning at *src, with size sz.
+/// The 7 pivots are marked by p0..p7.
+/// The results are emplaced in buckets, 
 /// 
-__forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz,
-    size_t p0, size_t p1, size_t p2, size_t p3, size_t p4, size_t p5, size_t p6,                                    // Pivots
-    int32_t* b0, int32_t* b1, int32_t* b2, int32_t* b3, int32_t* b4, int32_t* b5, int32_t* b6, int32_t* b7,         // Bucket heads
-    int32_t*& t0, int32_t*& t1, int32_t*& t2, int32_t*& t3, int32_t*& t4, int32_t*& t5, int32_t*& t6, int32_t*& t7) // bucket Tails
+/// 
+__forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chunk_sz, Buckets& bkts,
+    int32_t p0, int32_t p1, int32_t p2, int32_t p3, int32_t p4, int32_t p5, int32_t p6)         // pivots
 {
     // assume sz % CHUNK_SZ == 0
 
-    int32_t* bf = new int[CHUNK_SZ] {0};    // = to memset?
+    int32_t* bf = new int[chunk_sz] {0};    // = to memset?
 
     __m256i pv0 = _mm256_set1_epi32(p0),    // vectorized pivots
         pv1 = _mm256_set1_epi32(p1),
@@ -73,21 +106,22 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz,
         pv4 = _mm256_set1_epi32(p4),
         pv5 = _mm256_set1_epi32(p5),
         pv6 = _mm256_set1_epi32(p6);
-    
-    for (int32_t* chunk = src; chunk != src + sz; chunk += CHUNK_SZ)
+
+    for (int32_t* chunk = src; chunk != src + sz; chunk += chunk_sz)
     {
         // 2 way partition  src --> bf
-        size_t k_ctr = bipartition_1dst_i32x8(bf, src, CHUNK_SZ, p3, pv3); 
+        size_t k_ctr = bipartition_1_i32x8(bf, src, chunk_sz, p3, pv3); 
     
         // 4 way partition  bf --> src
-        size_t k_left = bipartition_1dst_i32x8(src, bf, k_ctr, p1, pv1);
-        size_t k_right = bipartition_1dst_i32x8(src + k_ctr, bf + k_ctr, CHUNK_SZ-k_ctr, p5, pv5) + k_ctr;
-    
-
+        size_t k_left = bipartition_1_i32x8(src, bf, k_ctr, p1, pv1);
+        size_t k_right = bipartition_1_i32x8(src + k_ctr, bf + k_ctr, chunk_sz - k_ctr, p5, pv5) + k_ctr;
+        
+        // 8 way partition  src --> bkts
+        bipartition_2_i32x8(bkts.b0.end, bkts.b1.begin, src, k_left, p0, pv0);
+        bipartition_2_i32x8(bkts.b2.end, bkts.b3.begin, src + k_left, k_ctr - k_left, p2, pv2);
+        bipartition_2_i32x8(bkts.b4.end, bkts.b5.begin, src + k_ctr, k_right - k_ctr, p4, pv4);
+        bipartition_2_i32x8(bkts.b6.end, bkts.b7.begin, src + k_right, chunk_sz - k_right, p6, pv6);
     }
-
-
-
 }
 
 /*
@@ -103,12 +137,53 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz,
 */
 
 
-__forceinline void benchmark_buckets()
+void benchmark_buckets(size_t sz)
 {
+    srand(1000);
 
+    int32_t* src = new int[sz];
+    // fill with random numbers [0, 80)
+    for (int i = 0; i < sz; i++) src[i] = (rand() % 80);   
+    // est. size of bucket = total size / 8 * 2 for safety
+    size_t est_bkt_sz = (size_t)((sz / 8.0) * 2); 
 
+    Buckets bkts = {
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+    };
+    
+    help::arrprint("in", src, sz);
 
+    partition_8buckets_i32x8(src, sz, sz, bkts, 10, 20, 30, 40, 50, 60, 70);
 
+    std::cout << bkts.b0.size() << ":";
+    bkts.b0.str();
 
+    std::cout << bkts.b1.size() << ":";
+    bkts.b1.str();
+
+    std::cout << bkts.b2.size() << ":";
+    bkts.b2.str();
+
+    std::cout << bkts.b3.size() << ":";
+    bkts.b3.str();
+
+    std::cout << bkts.b4.size() << ":";
+    bkts.b4.str();
+
+    std::cout << bkts.b5.size() << ":";
+    bkts.b5.str();
+
+    std::cout << bkts.b6.size() << ":";
+    bkts.b6.str();
+
+    std::cout << bkts.b7.size() << ":";
+    bkts.b7.str();
 
 }

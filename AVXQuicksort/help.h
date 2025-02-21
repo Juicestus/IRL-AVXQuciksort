@@ -33,7 +33,9 @@ namespace help {
         for (int i = 0; i < strlen(name) + 3; i++) std::cout << " ";
         for (int i = 0; i < sz; i++) printf("%2d ", i);
         printf("\n%s = ", name);
-        for (int i = 0; i < sz; i++) printf("%2d ", arr[i]);
+        for (int i = 0; i < sz; i++)
+            if (arr[i] >= 100 || arr[i] < 0) printf(" x ");
+            else printf("%2d ", arr[i]);
         std::cout << "\n\n";
     }
 };

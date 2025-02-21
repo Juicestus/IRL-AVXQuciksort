@@ -44,7 +44,8 @@ int main(int argc, char** argv)
 
     // 13.5 (7.4) b ints/s
 
-    benchmark_buckets(70);
+    //test_buckets(64*2);
+    benchmark_buckets();
 
     return 0;
 }

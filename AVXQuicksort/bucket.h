@@ -41,7 +41,7 @@ __forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t
     for (int32_t* sk = end; sk != end + rem; sk++)
     {
         if (*sk <= piv) *(dst_l++) = *sk;
-        else            *(dst_r--) = *sk;
+        else            *(--dst_r) = *sk;   // watch these pre vs. postfix
     }
 }
 
@@ -57,7 +57,7 @@ struct Bucket {
     int32_t* end;
 
     __forceinline size_t size() { return end - begin; }
-    __forceinline void str() 
+    __forceinline void print() 
     {
         std::cout << " [ ";
         for (int32_t* k = begin; k != end; k++)
@@ -82,7 +82,10 @@ enum bucket_alignment { BTK_ALIGN_LEFT, BTK_ALIGN_RIGHT };
 __forceinline Bucket create_bucket(size_t sz, bucket_alignment align)
 {
     Bucket b{};
-    b.begin = new int32_t[sz]{ 0 } + align * sz;
+    b.begin = new int32_t[sz];
+    //memset(b.begin, 0, sz);
+    for (int i = 0; i < sz; i++) b.begin[i] = 0;
+    if (align) b.begin += sz;
     b.end = b.begin;
     return b;
 }
@@ -97,7 +100,8 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
 {
     // assume sz % CHUNK_SZ == 0
 
-    int32_t* bf = new int[chunk_sz] {0};    // = to memset?
+    int32_t* bf = new int[chunk_sz];    // = to memset?
+    memset(bf, 0, chunk_sz);
 
     __m256i pv0 = _mm256_set1_epi32(p0),    // vectorized pivots
         pv1 = _mm256_set1_epi32(p1),
@@ -106,9 +110,11 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         pv4 = _mm256_set1_epi32(p4),
         pv5 = _mm256_set1_epi32(p5),
         pv6 = _mm256_set1_epi32(p6);
-
+    
+    int i = 0;
     for (int32_t* chunk = src; chunk != src + sz; chunk += chunk_sz)
     {
+            std::cout << i++ << "\n";
         // 2 way partition  src --> bf
         size_t k_ctr = bipartition_1_i32x8(bf, src, chunk_sz, p3, pv3); 
     
@@ -116,10 +122,6 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         size_t k_left = bipartition_1_i32x8(src, bf, k_ctr, p1, pv1);
         size_t k_right = bipartition_1_i32x8(src + k_ctr, bf + k_ctr, chunk_sz - k_ctr, p5, pv5) + k_ctr;
 
-        help::arrprint("4way", src, chunk_sz);
-
-        std::cout << k_left << " " << k_ctr << " " << k_right << "\n";
-        
         // 8 way partition  src --> bkts
         bipartition_2_i32x8(bkts.b0.end, bkts.b1.begin, src, k_left, p0, pv0);
         bipartition_2_i32x8(bkts.b2.end, bkts.b3.begin, src + k_left, k_ctr - k_left, p2, pv2);
@@ -132,16 +134,49 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
  const size_t sz = static_cast<size_t>(1) << 12, iters = 1000000;                                        \
     int* src = new int [sz], * dst = new int [sz];                                                          \
     for (int i = 0; i < sz; i++) src[i] = rand() % INT32_MAX;                                               \
+ */
+
+void benchmark_buckets()
+{
+    
+    // generate dataset and fill with random data
+    srand(1000);
+    size_t chunk_sz = 4096, sz = chunk_sz * 524288; // sz ~= 2.14b this actually grows out of ram -- need to fix that
+    int32_t* src = new int[sz];
+    for (int i = 0; i < sz; i++) src[i] = (rand() % INT32_MAX);   
+    
+    // construct buckets and emplace in struct
+    // est. size of bucket = total size / 8 * 2 for safety
+    size_t est_bkt_sz = (size_t)((sz / 8.0) * 2); 
+    Buckets bkts = {
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
+        create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
+    };
+
+    int32_t p = INT32_MAX / 8;
+
     auto t_start = std::chrono::high_resolution_clock::now();                                               \
-    for (int i = 0; i < iters; i++) auto ipivs = FCALL;                                                     \
-    auto t_end = std::chrono::high_resolution_clock::now();                                                 \
-    double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();            \
-    std::cout << "took " << elapsed_time_ms << "ms to partition " << iters * sz << " integers\n";           \
-    std::cout << "the partition rate = " << (iters * sz) / (elapsed_time_ms * 1000000) << "b integers/s";   \
-*/
+
+    partition_8buckets_i32x8(src, sz, 4096, bkts, 
+            p, 2*p, 3*p, 4*p, 5*p, 6*p, 7*p);
+
+    auto t_end = std::chrono::high_resolution_clock::now();                                                 
+    double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();            
+    std::cout << "took " << elapsed_time_ms << "ms to partition " << sz << " integers\n";           
+    std::cout << "the partition rate = " << sz / (elapsed_time_ms * 1000000) << "b integers/s";   
 
 
-void benchmark_buckets(size_t sz)
+
+}
+
+
+void test_buckets(size_t sz)
 {
     srand(1000);
 
@@ -164,30 +199,30 @@ void benchmark_buckets(size_t sz)
     
     help::arrprint("in", src, sz);
 
-    partition_8buckets_i32x8(src, sz, sz, bkts, 10, 20, 30, 40, 50, 60, 70);
+    partition_8buckets_i32x8(src, sz, 64, bkts, 10, 20, 30, 40, 50, 60, 70);
 
     std::cout << bkts.b0.size() << ":";
-    bkts.b0.str();
+    bkts.b0.print();
 
     std::cout << bkts.b1.size() << ":";
-    bkts.b1.str();
+    bkts.b1.print();
 
     std::cout << bkts.b2.size() << ":";
-    bkts.b2.str();
+    bkts.b2.print();
 
     std::cout << bkts.b3.size() << ":";
-    bkts.b3.str();
+    bkts.b3.print();
 
     std::cout << bkts.b4.size() << ":";
-    bkts.b4.str();
+    bkts.b4.print();
 
     std::cout << bkts.b5.size() << ":";
-    bkts.b5.str();
+    bkts.b5.print();
 
     std::cout << bkts.b6.size() << ":";
-    bkts.b6.str();
+    bkts.b6.print();
 
     std::cout << bkts.b7.size() << ":";
-    bkts.b7.str();
+    bkts.b7.print();
 
 }

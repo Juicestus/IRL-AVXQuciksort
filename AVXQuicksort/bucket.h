@@ -28,7 +28,7 @@ __forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t
         __m256i idxs = permidxs8[mask];
         __m256i shuffled = _mm256_permutevar8x32_epi32(window, idxs);
         uint8_t k = popcnts8[mask];     // lookup table for __popcnt(mask), slightly faster.
-
+    
         _mm256_storeu_epi32(dst_l, shuffled);
         dst_l += k;
 
@@ -111,13 +111,11 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         pv5 = _mm256_set1_epi32(p5),
         pv6 = _mm256_set1_epi32(p6);
     
-    int i = 0;
     for (int32_t* chunk = src; chunk != src + sz; chunk += chunk_sz)
     {
-            std::cout << i++ << "\n";
         // 2 way partition  src --> bf
         size_t k_ctr = bipartition_1_i32x8(bf, src, chunk_sz, p3, pv3); 
-    
+
         // 4 way partition  bf --> src
         size_t k_left = bipartition_1_i32x8(src, bf, k_ctr, p1, pv1);
         size_t k_right = bipartition_1_i32x8(src + k_ctr, bf + k_ctr, chunk_sz - k_ctr, p5, pv5) + k_ctr;
@@ -140,14 +138,18 @@ void benchmark_buckets()
 {
     
     // generate dataset and fill with random data
-    srand(1000);
-    size_t chunk_sz = 4096, sz = chunk_sz * 524288; // sz ~= 2.14b this actually grows out of ram -- need to fix that
+
+    // sz = 1.07b = 4 GiB, chunk_sz = 16 KiB
+    size_t chunk_sz = 4096, sz = chunk_sz * 262144; //524288; 
     int32_t* src = new int[sz];
-    for (int i = 0; i < sz; i++) src[i] = (rand() % INT32_MAX);   
-    
+    for (int i = 0; i < chunk_sz; i++) src[i] = (rand() % INT32_MAX);   
+    for (int i = chunk_sz; i < sz; i++) src[i] = src[i % chunk_sz];
+    std::cout << "Generated input dataset.\n";
+
     // construct buckets and emplace in struct
     // est. size of bucket = total size / 8 * 2 for safety
-    size_t est_bkt_sz = (size_t)((sz / 8.0) * 2); 
+    // for the above input size this actualy equates to 
+    size_t est_bkt_sz = (size_t)((sz)); 
     Buckets bkts = {
         create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
         create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
@@ -158,6 +160,7 @@ void benchmark_buckets()
         create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
         create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
     };
+    std::cout << "Allocated buckets.\n";
 
     int32_t p = INT32_MAX / 8;
 
@@ -165,14 +168,12 @@ void benchmark_buckets()
 
     partition_8buckets_i32x8(src, sz, 4096, bkts, 
             p, 2*p, 3*p, 4*p, 5*p, 6*p, 7*p);
-
+    
     auto t_end = std::chrono::high_resolution_clock::now();                                                 
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();            
-    std::cout << "took " << elapsed_time_ms << "ms to partition " << sz << " integers\n";           
-    std::cout << "the partition rate = " << sz / (elapsed_time_ms * 1000000) << "b integers/s";   
-
-
-
+    std::cout << "Partition completed.\n";
+    std::cout << " took " << elapsed_time_ms << "ms to partition " << sz << " integers\n";           
+    std::cout << " the partition rate = " << sz / (elapsed_time_ms * 1000000) << "b integers/s";   
 }
 
 

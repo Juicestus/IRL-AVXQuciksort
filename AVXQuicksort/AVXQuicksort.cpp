@@ -11,6 +11,7 @@
 #include "help.h"
 #include "generate.h"
 //#include "competitor.h"
+#include "bipartition.h"
 #include "bucket.h"
 
 //extern "C" uint64_t power(uint64_t n, uint64_t p);
@@ -41,10 +42,15 @@
 
 int main(int argc, char** argv)
 {
+    srand(1200);
 
-    // 13.5 (7.4) b ints/s
+    // peak of 7.4 (13.5) b ints/s
+    //BENCHMARK(bipartition_1_i32x8(dst, src, sz, INT_MAX/2, _mm256_set1_epi32(INT_MAX/2)))
+    //BENCHMARK(simple_bipartition_1dst_i32x8(src, sz, INT_MAX / 2, dst))
 
     //test_buckets(64*2);
+     
+    // peak of 1.89 b int/s 
     benchmark_buckets();
 
     return 0;

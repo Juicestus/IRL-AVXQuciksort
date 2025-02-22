@@ -1,13 +1,15 @@
 #pragma once
 
-#include "lookup.h"
-
 #include <cstdint>
+#include <random>
+#include <iostream>
+#include <chrono>
+
 #include <intrin.h>
 #include <smmintrin.h>
 #include <immintrin.h> 
-#include <tuple>
-#include <vector>
+
+#include "lookup.h"
 
 /// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
 /// Pivot must be passed into piv (as scalar) and piv_vec (as vector).
@@ -15,6 +17,7 @@
 /// Greated than partition is written into *dst_r in right to left order.
 __forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
 {
+    int32_t* dst_l_old = dst_l;
     size_t rem = sz % 8;
     int32_t* end = src + (sz - rem);
 
@@ -83,8 +86,7 @@ __forceinline Bucket create_bucket(size_t sz, bucket_alignment align)
 {
     Bucket b{};
     b.begin = new int32_t[sz];
-    //memset(b.begin, 0, sz);
-    for (int i = 0; i < sz; i++) b.begin[i] = 0;
+    memset(b.begin, 0, sz);
     if (align) b.begin += sz;
     b.end = b.begin;
     return b;
@@ -111,6 +113,7 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         pv5 = _mm256_set1_epi32(p5),
         pv6 = _mm256_set1_epi32(p6);
     
+    //long s = 0; // ignore ts
     for (int32_t* chunk = src; chunk != src + sz; chunk += chunk_sz)
     {
         // 2 way partition  src --> bf
@@ -125,31 +128,45 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         bipartition_2_i32x8(bkts.b2.end, bkts.b3.begin, src + k_left, k_ctr - k_left, p2, pv2);
         bipartition_2_i32x8(bkts.b4.end, bkts.b5.begin, src + k_ctr, k_right - k_ctr, p4, pv4);
         bipartition_2_i32x8(bkts.b6.end, bkts.b7.begin, src + k_right, chunk_sz - k_right, p6, pv6);
-    }
-}
+        
+        // back into bf:
+        //int32_t* _ = bf;
+        //int32_t* a = bf + k_left;
+        //int32_t* b = bf + k_ctr;
+        //int32_t* c = bf + k_right;
+        //int32_t* d = bf + chunk_sz;
+        //bipartition_2_i32x8(_, a, src, k_left, p0, pv0);
+        //bipartition_2_i32x8(a, b, src + k_left, k_ctr - k_left, p2, pv2);
+        //bipartition_2_i32x8(b, c, src + k_ctr, k_right - k_ctr, p4, pv4);
+        //bipartition_2_i32x8(c, d, src + k_right, chunk_sz - k_right, p6, pv6);
 
-/*
- const size_t sz = static_cast<size_t>(1) << 12, iters = 1000000;                                        \
-    int* src = new int [sz], * dst = new int [sz];                                                          \
-    for (int i = 0; i < sz; i++) src[i] = rand() % INT32_MAX;                                               \
- */
+        // do something w/ some "random" value of bf so the compiler doesnt optimize away writes
+        //s += bf[(int)((int)chunk * 3.14159) % chunk_sz];
+    }
+    //std::cout << s << "\n"; // make sure to use s
+
+   
+}
 
 void benchmark_buckets()
 {
-    
     // generate dataset and fill with random data
+    size_t chunk_sz = static_cast<size_t>(1) << 10,
+                 sz = static_cast<size_t>(1) << 28; 
+    int32_t* src = new int32_t[sz];
 
-    // sz = 1.07b = 4 GiB, chunk_sz = 16 KiB
-    size_t chunk_sz = 4096, sz = chunk_sz * 262144; //524288; 
-    int32_t* src = new int[sz];
-    for (int i = 0; i < chunk_sz; i++) src[i] = (rand() % INT32_MAX);   
-    for (int i = chunk_sz; i < sz; i++) src[i] = src[i % chunk_sz];
+    std::default_random_engine rng;
+    rng.seed(std::random_device{}());
+    std::uniform_int_distribution<int32_t> dist(0, INT32_MAX);
+
+    for (int i = 0; i < sz; i++) src[i] = dist(rng);   
     std::cout << "Generated input dataset.\n";
 
     // construct buckets and emplace in struct
     // est. size of bucket = total size / 8 * 2 for safety
     // for the above input size this actualy equates to 
-    size_t est_bkt_sz = (size_t)((sz)); 
+    size_t est_bkt_sz = (size_t)((sz / 8) * 1.2); 
+    std::cout << "Alocating buckets of size " << est_bkt_sz << "\n";
     Buckets bkts = {
         create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
         create_bucket(est_bkt_sz, BTK_ALIGN_RIGHT),
@@ -163,17 +180,24 @@ void benchmark_buckets()
     std::cout << "Allocated buckets.\n";
 
     int32_t p = INT32_MAX / 8;
-
     auto t_start = std::chrono::high_resolution_clock::now();                                               \
-
-    partition_8buckets_i32x8(src, sz, 4096, bkts, 
+    partition_8buckets_i32x8(src, sz, chunk_sz, bkts, 
             p, 2*p, 3*p, 4*p, 5*p, 6*p, 7*p);
     
     auto t_end = std::chrono::high_resolution_clock::now();                                                 
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();            
     std::cout << "Partition completed.\n";
     std::cout << " took " << elapsed_time_ms << "ms to partition " << sz << " integers\n";           
-    std::cout << " the partition rate = " << sz / (elapsed_time_ms * 1000000) << "b integers/s";   
+    std::cout << " the partition rate = " << sz / (elapsed_time_ms * 1000000) << "b integers/s\n";   
+
+    std::cout << " bucket 1 size = " << bkts.b0.size() << "\n";
+    std::cout << " bucket 2 size = " << bkts.b1.size() << "\n";
+    std::cout << " bucket 3 size = " << bkts.b2.size() << "\n";
+    std::cout << " bucket 4 size = " << bkts.b3.size() << "\n";
+    std::cout << " bucket 5 size = " << bkts.b4.size() << "\n";
+    std::cout << " bucket 6 size = " << bkts.b5.size() << "\n";
+    std::cout << " bucket 7 size = " << bkts.b6.size() << "\n";
+    std::cout << " bucket 8 size = " << bkts.b7.size() << "\n";
 }
 
 
@@ -185,7 +209,7 @@ void test_buckets(size_t sz)
     // fill with random numbers [0, 80)
     for (int i = 0; i < sz; i++) src[i] = (rand() % 80);   
     // est. size of bucket = total size / 8 * 2 for safety
-    size_t est_bkt_sz = (size_t)((sz / 8.0) * 2); 
+    size_t est_bkt_sz = (size_t)((sz / 8.0) * 1.1); 
 
     Buckets bkts = {
         create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
@@ -227,3 +251,32 @@ void test_buckets(size_t sz)
     bkts.b7.print();
 
 }
+
+
+void benchmark_bipartition()
+{
+    // generate dataset and fill with random data
+    size_t sz = static_cast<size_t>(1) << 12;
+    size_t iters = 1000000;
+    int32_t* dst = new int32_t[sz];
+    memset(dst, 0, sz);
+    int32_t* src = new int32_t[sz];
+    std::default_random_engine rng;
+    rng.seed(std::random_device{}());
+    std::uniform_int_distribution<int32_t> dist(0, INT32_MAX);
+    for (int i = 0; i < sz; i++) src[i] = dist(rng);   
+    std::cout << "Generated input dataset.\n";
+
+    int32_t p = INT32_MAX / 2;
+    auto t_start = std::chrono::high_resolution_clock::now();                                               
+    for (int i = 0; i < iters; i++)
+        bipartition_1_i32x8(dst, src, sz, p, _mm256_set1_epi32(p));
+    
+    auto t_end = std::chrono::high_resolution_clock::now();                                                 
+    double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();            
+    std::cout << "Partition completed.\n";
+    std::cout << " took " << elapsed_time_ms << "ms to partition " << (iters*sz) << " integers\n";           
+    std::cout << " the partition rate = " << (iters*sz) / (elapsed_time_ms * 1000000) << "b integers/s\n";   
+
+}
+

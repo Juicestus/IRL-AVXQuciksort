@@ -269,7 +269,7 @@ const __m256i permutation_masks[256] = { _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 
 
 /* partition a single vector, return how many values are greater than pivot,
  * update smallest and largest values in smallest_vec and biggest_vec respectively */
-    inline int partition_vec(__m256i& curr_vec, const __m256i& pivot_vec,
+    __forceinline int partition_vec(__m256i& curr_vec, const __m256i& pivot_vec,
         __m256i& smallest_vec, __m256i& biggest_vec) {
     /* which elements are larger than the pivot */
     __m256i compared = _mm256_cmpgt_epi32(curr_vec, pivot_vec);
@@ -287,7 +287,7 @@ const __m256i permutation_masks[256] = { _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 
     return amount_gt_pivot;
 }
 
-    inline int calc_min(__m256i vec) { /* minimum of 8 int */
+    __forceinline int calc_min(__m256i vec) { /* minimum of 8 int */
         auto perm_mask = _mm256_setr_epi32(7, 6, 5, 4, 3, 2, 1, 0);
         vec = _mm256_min_epi32(vec, _mm256_permutevar8x32_epi32(vec, perm_mask));
         vec = _mm256_min_epi32(vec, _mm256_shuffle_epi32(vec, 0b10110001));
@@ -295,7 +295,7 @@ const __m256i permutation_masks[256] = { _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 
         return _mm256_extract_epi32(vec, 0);
     }
 
-    inline int calc_max(__m256i vec) { /* maximum of 8 int */
+    __forceinline int calc_max(__m256i vec) { /* maximum of 8 int */
         auto perm_mask = _mm256_setr_epi32(7, 6, 5, 4, 3, 2, 1, 0);
         vec = _mm256_max_epi32(vec, _mm256_permutevar8x32_epi32(vec, perm_mask));
         vec = _mm256_max_epi32(vec, _mm256_shuffle_epi32(vec, 0b10110001));
@@ -303,7 +303,7 @@ const __m256i permutation_masks[256] = { _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 
         return _mm256_extract_epi32(vec, 0);
     }
 
-inline int partition_vectorized_8(int* arr, int left, int right,
+__forceinline int partition_vectorized_8(int* arr, int left, int right,
     int pivot, int& smallest, int& biggest) {
     /* make array length divisible by eight, shortening the array */
     for (int i = (right - left) % 8; i > 0; --i) {
@@ -366,7 +366,7 @@ inline int partition_vectorized_8(int* arr, int left, int right,
     return l_store;
 }
 
-inline int partition_vectorized_64(int* arr, int left, int right,
+__forceinline int partition_vectorized_64(int* arr, int left, int right,
     int pivot, int& smallest, int& biggest) {
     if (right - left < 129) { /* do not optimize if less than 129 elements */
         return partition_vectorized_8(arr, left, right, pivot, smallest, biggest);

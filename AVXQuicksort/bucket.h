@@ -55,44 +55,6 @@ __forceinline size_t bipartition_1_i32x8(int32_t* dst, int32_t* src, size_t sz, 
     return dst_l - dst;
 }
 
-__forceinline void avxmemcpy(int32_t* dst, int32_t* src, size_t sz)
-{
-    for (int32_t* sk = src; sk < src + sz; ) {
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk)); 
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        sk += 8; dst += 8;
-    }
-
-    for (int32_t* sk = src; sk < src + sz + 8; sk += 8) {
-        _mm256_storeu_epi32(dst, _mm256_loadu_epi32(sk));
-        dst + 8;
-    }
-}
-
-__forceinline void bipartition_2b_i32x8(int32_t*& bkt_1, int32_t*& bkt_2, int32_t* dst, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
-{
-    // kl = dst, kr = dst + sz
-    int32_t* l = dst, * r = dst + sz;
-    bipartition_2_i32x8(l, r, src, sz, piv, piv_vec);
-    avxmemcpy(bkt_1, dst, l - dst);
-    bkt_1 += (l - dst);
-    bkt_2 -= (dst + sz - r);
-    avxmemcpy(bkt_2, r, dst + sz - r);
-}
-
 struct Bucket {
     int32_t* begin;
     int32_t* end;
@@ -161,19 +123,12 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         // 4 way partition  bf --> src
         size_t k_left = bipartition_1_i32x8(src, bf, k_ctr, p1, pv1);
         size_t k_right = bipartition_1_i32x8(src + k_ctr, bf + k_ctr, chunk_sz - k_ctr, p5, pv5) + k_ctr;
-#ifndef USE_BUFFERING 
+
         // 8 way partition  src --> bkts
         bipartition_2_i32x8(bkts.b0.end, bkts.b1.begin, src, k_left, p0, pv0);
         bipartition_2_i32x8(bkts.b2.end, bkts.b3.begin, src + k_left, k_ctr - k_left, p2, pv2);
         bipartition_2_i32x8(bkts.b4.end, bkts.b5.begin, src + k_ctr, k_right - k_ctr, p4, pv4);
         bipartition_2_i32x8(bkts.b6.end, bkts.b7.begin, src + k_right, chunk_sz - k_right, p6, pv6);
-#else
-        // 8 way partition  src --> bkts
-        bipartition_2b_i32x8(bkts.b0.end, bkts.b1.begin, bf, src, k_left, p0, pv0);
-        bipartition_2b_i32x8(bkts.b2.end, bkts.b3.begin, bf, src + k_left, k_ctr - k_left, p2, pv2);
-        bipartition_2b_i32x8(bkts.b4.end, bkts.b5.begin, bf, src + k_ctr, k_right - k_ctr, p4, pv4);
-        bipartition_2b_i32x8(bkts.b6.end, bkts.b7.begin, bf, src + k_right, chunk_sz - k_right, p6, pv6);
-#endif
         
         // 8 way partition  src --> bf 
         //int32_t* _ = bf;

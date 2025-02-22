@@ -47,14 +47,12 @@ void benchmark_competitor()
 
 int main(int argc, char** argv)
 {
-
     //benchmark_competitor();
     //benchmark_bipartition();
-     
     benchmark_buckets();
 
 
-    //test_buckets(64*2);
+    //test_buckets(64*4);
 
     return 0;
 }

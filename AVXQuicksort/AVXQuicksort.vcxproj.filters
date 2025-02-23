@@ -35,6 +35,12 @@
     <ClInclude Include="help.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="arif_datagen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="arif_common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="ll.asm">

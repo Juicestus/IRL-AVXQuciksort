@@ -251,8 +251,8 @@ void test_buckets(size_t sz)
 void benchmark_bipartition()
 {
     // generate dataset and fill with random data
-    size_t sz = static_cast<size_t>(1) << 12;
-    size_t iters = 1000000;
+    size_t sz = static_cast<size_t>(1) << 10;
+    size_t iters = 10000000;
     int32_t* dst = new int32_t[sz];
     memset(dst, 0, sz);
     int32_t* src = new int32_t[sz];

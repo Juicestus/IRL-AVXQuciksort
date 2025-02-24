@@ -60,8 +60,8 @@ void benchmark_blacher()
 int main(int argc, char** argv)
 {
     //benchmark_blacher();
-    benchmark_bipartition();
-    //benchmark_buckets();
+    //benchmark_bipartition();
+    benchmark_buckets();
 
 
     //test_buckets(64*4);

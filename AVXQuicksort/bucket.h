@@ -260,22 +260,24 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
         size_t k_left = bipartition_1_i32x8(src, bf, k_ctr, p1, pv1);
         size_t k_right = bipartition_1_i32x8(src + k_ctr, bf + k_ctr, chunk_sz - k_ctr, p5, pv5) + k_ctr;
 
+#ifdef WRITE_TO_BUCKETS         // why is this sh!t slow
         // 8 way partition  src --> bkts
         bipartition_2_i32x8(bkts.b0.end, bkts.b1.begin, src, k_left, p0, pv0);
         bipartition_2_i32x8(bkts.b2.end, bkts.b3.begin, src + k_left, k_ctr - k_left, p2, pv2);
         bipartition_2_i32x8(bkts.b4.end, bkts.b5.begin, src + k_ctr, k_right - k_ctr, p4, pv4);
         bipartition_2_i32x8(bkts.b6.end, bkts.b7.begin, src + k_right, chunk_sz - k_right, p6, pv6);
-        
+#else 
         // 8 way partition  src --> bf 
-        //int32_t* _ = bf;
-        //int32_t* a = bf + k_left;
-        //int32_t* b = bf + k_ctr;
-        //int32_t* c = bf + k_right;
-        //int32_t* d = bf + chunk_sz;
-        //bipartition_2_i32x8(_, a, src, k_left, p0, pv0);
-        //bipartition_2_i32x8(a, b, src + k_left, k_ctr - k_left, p2, pv2);
-        //bipartition_2_i32x8(b, c, src + k_ctr, k_right - k_ctr, p4, pv4);
-        //bipartition_2_i32x8(c, d, src + k_right, chunk_sz - k_right, p6, pv6);
+        int32_t* _ = bf;
+        int32_t* a = bf + k_left;
+        int32_t* b = bf + k_ctr;
+        int32_t* c = bf + k_right;
+        int32_t* d = bf + chunk_sz;
+        bipartition_2_i32x8(_, a, src, k_left, p0, pv0);
+        bipartition_2_i32x8(a, b, src + k_left, k_ctr - k_left, p2, pv2);
+        bipartition_2_i32x8(b, c, src + k_ctr, k_right - k_ctr, p4, pv4);
+        bipartition_2_i32x8(c, d, src + k_right, chunk_sz - k_right, p6, pv6);
+#endif
     }
 }
 
@@ -389,7 +391,6 @@ void test_buckets(size_t sz)
     bkts.b7.print();
 
 }
-
 
 void benchmark_bipartition()
 {

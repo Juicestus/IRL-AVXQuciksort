@@ -9,19 +9,138 @@
 #include <smmintrin.h>
 #include <immintrin.h> 
 
+#include "arif_datagen.h"
 #include "lookup.h"
 
-/// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
-/// Pivot must be passed into piv (as scalar) and piv_vec (as vector).
-/// Less than partition is written into *dst_l in left to right order.
-/// Greated than partition is written into *dst_r in right to left order.
-__forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
+__forceinline void chunk_8x8(int32_t*& dst_l, int32_t*& dst_r, int32_t*& sk, int32_t* end, int32_t piv, __m256i piv_vec)
 {
-    int32_t* dst_l_old = dst_l;
-    size_t rem = sz % 8;
-    int32_t* end = src + (sz - rem);
+    for ( ; sk != end; sk += 64)
+    {
+        __m256i window0 = _mm256_loadu_epi32(sk);                           // hold ymm 0..7
+        __m256i window1 = _mm256_loadu_epi32(sk+8);
+        __m256i window2 = _mm256_loadu_epi32(sk+16);
+        __m256i window3 = _mm256_loadu_epi32(sk+24);
+        __m256i window4 = _mm256_loadu_epi32(sk+32);
+        __m256i window5 = _mm256_loadu_epi32(sk+40);
+        __m256i window6 = _mm256_loadu_epi32(sk+48);
+        __m256i window7 = _mm256_loadu_epi32(sk+56);
 
-    for (int32_t* sk = src; sk != end; sk += 8)
+        __m256i cmpres0 = _mm256_cmpgt_epi32(piv_vec, window0);             // hold ymm 8..15
+        __m256i cmpres1 = _mm256_cmpgt_epi32(piv_vec, window1);
+        __m256i cmpres2 = _mm256_cmpgt_epi32(piv_vec, window2);
+        __m256i cmpres3 = _mm256_cmpgt_epi32(piv_vec, window3);
+        __m256i cmpres4 = _mm256_cmpgt_epi32(piv_vec, window4);
+        __m256i cmpres5 = _mm256_cmpgt_epi32(piv_vec, window5);
+        __m256i cmpres6 = _mm256_cmpgt_epi32(piv_vec, window6);
+        __m256i cmpres7 = _mm256_cmpgt_epi32(piv_vec, window7);
+
+        uint16_t mask0 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres0));  // free ymm 8..15
+        uint16_t mask1 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres1));  
+        uint16_t mask2 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres2));
+        uint16_t mask3 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres3));
+        uint16_t mask4 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres4));
+        uint16_t mask5 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres5));
+        uint16_t mask6 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres6));
+        uint16_t mask7 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres7));
+
+        __m256i idxs0 = permidxs8[mask0];                                   // hold ymm 8..15
+        __m256i idxs1 = permidxs8[mask1];
+        __m256i idxs2 = permidxs8[mask2];
+        __m256i idxs3 = permidxs8[mask3];
+        __m256i idxs4 = permidxs8[mask4];
+        __m256i idxs5 = permidxs8[mask5];
+        __m256i idxs6 = permidxs8[mask6];
+        __m256i idxs7 = permidxs8[mask7];
+
+        __m256i shuffled0 = _mm256_permutevar8x32_epi32(window0, idxs0);    // free ymm 0..7
+        __m256i shuffled1 = _mm256_permutevar8x32_epi32(window1, idxs1);    // free ymm 8..15
+        __m256i shuffled2 = _mm256_permutevar8x32_epi32(window2, idxs2);    // hold ymm 0..7
+        __m256i shuffled3 = _mm256_permutevar8x32_epi32(window3, idxs3);
+        __m256i shuffled4 = _mm256_permutevar8x32_epi32(window4, idxs4);
+        __m256i shuffled5 = _mm256_permutevar8x32_epi32(window5, idxs5);
+        __m256i shuffled6 = _mm256_permutevar8x32_epi32(window6, idxs6);
+        __m256i shuffled7 = _mm256_permutevar8x32_epi32(window7, idxs7);
+
+        uint8_t k0 = popcnts8[mask0];     // lookup table for __popcnt(mask), slightly faster.
+        uint8_t k1 = popcnts8[mask1];     
+        uint8_t k2 = popcnts8[mask2];     
+        uint8_t k3 = popcnts8[mask3];     
+        uint8_t k4 = popcnts8[mask4];     
+        uint8_t k5 = popcnts8[mask5];     
+        uint8_t k6 = popcnts8[mask6];     
+        uint8_t k7 = popcnts8[mask7];     
+    
+        _mm256_storeu_epi32(dst_l, shuffled0);   dst_l += k0;               // free ymm 0..7
+        _mm256_storeu_epi32(dst_l, shuffled1);   dst_l += k1;
+        _mm256_storeu_epi32(dst_l, shuffled2);   dst_l += k2;
+        _mm256_storeu_epi32(dst_l, shuffled3);   dst_l += k3;
+        _mm256_storeu_epi32(dst_l, shuffled4);   dst_l += k4;
+        _mm256_storeu_epi32(dst_l, shuffled5);   dst_l += k5;
+        _mm256_storeu_epi32(dst_l, shuffled6);   dst_l += k6;
+        _mm256_storeu_epi32(dst_l, shuffled7);   dst_l += k7;
+
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled0); dst_r += k0;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled1); dst_r += k1;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled2); dst_r += k2;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled3); dst_r += k3;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled4); dst_r += k4;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled5); dst_r += k5;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled6); dst_r += k6;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled7); dst_r += k7;
+        // could replace above w/ dst-=64, write 7-->0 order
+    }
+}
+
+__forceinline void chunk_4x8(int32_t*& dst_l, int32_t*& dst_r, int32_t*& sk, int32_t* end, int32_t piv, __m256i piv_vec)
+{
+    for ( ; sk != end; sk += 32)
+    {
+        __m256i window0 = _mm256_loadu_epi32(sk);                          
+        __m256i window1 = _mm256_loadu_epi32(sk+8);
+        __m256i window2 = _mm256_loadu_epi32(sk+16);
+        __m256i window3 = _mm256_loadu_epi32(sk+24);
+   
+        __m256i cmpres0 = _mm256_cmpgt_epi32(piv_vec, window0);             
+        __m256i cmpres1 = _mm256_cmpgt_epi32(piv_vec, window1);
+        __m256i cmpres2 = _mm256_cmpgt_epi32(piv_vec, window2);
+        __m256i cmpres3 = _mm256_cmpgt_epi32(piv_vec, window3);
+     
+        uint16_t mask0 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres0));  
+        uint16_t mask1 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres1));  
+        uint16_t mask2 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres2));
+        uint16_t mask3 = _mm256_movemask_ps(_mm256_castsi256_ps(cmpres3));
+       
+        __m256i idxs0 = permidxs8[mask0];                                   
+        __m256i idxs1 = permidxs8[mask1];
+        __m256i idxs2 = permidxs8[mask2];
+        __m256i idxs3 = permidxs8[mask3];
+
+        __m256i shuffled0 = _mm256_permutevar8x32_epi32(window0, idxs0);    
+        __m256i shuffled1 = _mm256_permutevar8x32_epi32(window1, idxs1);    
+        __m256i shuffled2 = _mm256_permutevar8x32_epi32(window2, idxs2);    
+        __m256i shuffled3 = _mm256_permutevar8x32_epi32(window3, idxs3);
+     
+        uint8_t k0 = popcnts8[mask0];     // lookup table for __popcnt(mask), slightly faster.
+        uint8_t k1 = popcnts8[mask1];     
+        uint8_t k2 = popcnts8[mask2];     
+        uint8_t k3 = popcnts8[mask3];     
+    
+    
+        _mm256_storeu_epi32(dst_l, shuffled0);   dst_l += k0;               // free ymm 0..7
+        _mm256_storeu_epi32(dst_l, shuffled1);   dst_l += k1;
+        _mm256_storeu_epi32(dst_l, shuffled2);   dst_l += k2;
+        _mm256_storeu_epi32(dst_l, shuffled3);   dst_l += k3;
+   
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled0); dst_r += k0;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled1); dst_r += k1;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled2); dst_r += k2;
+        dst_r -= 8; _mm256_storeu_epi32(dst_r, shuffled3); dst_r += k3;
+    }
+}
+
+__forceinline void chunk_1x8(int32_t*& dst_l, int32_t*& dst_r, int32_t*& sk, int32_t* end, int32_t piv, __m256i piv_vec)
+{
+    for ( ; sk != end; sk += 8)
     {
         __m256i window = _mm256_loadu_epi32(sk);
 
@@ -39,9 +158,23 @@ __forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t
         _mm256_storeu_epi32(dst_r, shuffled);
         dst_r += k;
     }
+}
 
+/// Simple bipartition (2-way, 1 pivot), input in *src with length sz.
+/// Pivot must be passed into piv (as scalar) and piv_vec (as vector).
+/// Less than partition is written into *dst_l in left to right order.
+/// Greated than partition is written into *dst_r in right to left order.
+__forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
+{
+#define SZ(N) (sz-(sz%N))
+
+    int32_t* sk = src;
+    chunk_8x8(dst_l, dst_r, sk, src + SZ(64), piv, piv_vec);
+    chunk_4x8(dst_l, dst_r, sk, src + SZ(32), piv, piv_vec);
+    chunk_1x8(dst_l, dst_r, sk, src + SZ(8), piv, piv_vec);
+   
     // handle leftover:
-    for (int32_t* sk = end; sk != end + rem; sk++)
+    for ( /* sk = end (already true) */; sk != (src+sz); sk++)
     {
         if (*sk <= piv) *(dst_l++) = *sk;
         else            *(--dst_r) = *sk;   // watch these pre vs. postfix
@@ -51,7 +184,10 @@ __forceinline void bipartition_2_i32x8(int32_t*& dst_l, int32_t*& dst_r, int32_t
 __forceinline size_t bipartition_1_i32x8(int32_t* dst, int32_t* src, size_t sz, int32_t piv, __m256i piv_vec)
 {
     int32_t* dst_l = dst, * dst_r = dst + sz;
+
+    //inline of: bipartition_2_i32x8(dst_l, dst_r, src, sz, piv, piv_vec);
     bipartition_2_i32x8(dst_l, dst_r, src, sz, piv, piv_vec);
+
     return dst_l - dst;
 }
 
@@ -145,16 +281,23 @@ __forceinline void partition_8buckets_i32x8(int32_t* src, size_t sz, size_t chun
 
 void benchmark_buckets()
 {
+    SetThreadAffinityMask(GetCurrentThread(), 1 << 2);
     // generate dataset and fill with random data
     size_t chunk_sz = static_cast<size_t>(1) << 10,
                  sz = static_cast<size_t>(1) << 28; 
     int32_t* src = new int32_t[sz];
 
+#define ARIF_DATAGEN
+#ifdef ARIF_DATAGEN
+    datagen::Writer<uint32_t> writer;
+    writer.generate((uint32_t*)src, sz, datagen::MT, INT32_MAX, 0);
+#else
     std::default_random_engine rng;
     rng.seed(std::random_device{}());
     std::uniform_int_distribution<int32_t> dist(0, INT32_MAX);
-
     for (int i = 0; i < sz; i++) src[i] = dist(rng);   
+#endif
+
     std::cout << "Generated input dataset.\n";
 
     // construct buckets and emplace in struct
@@ -204,7 +347,7 @@ void test_buckets(size_t sz)
     // fill with random numbers [0, 80)
     for (int i = 0; i < sz; i++) src[i] = (rand() % 80);   
     // est. size of bucket = total size / 8 * 2 for safety
-    size_t est_bkt_sz = (size_t)((sz / 8.0) * 1.3); 
+    size_t est_bkt_sz = (size_t)((sz / 8.0) * 2); 
 
     Buckets bkts = {
         create_bucket(est_bkt_sz, BTK_ALIGN_LEFT),
@@ -250,28 +393,40 @@ void test_buckets(size_t sz)
 
 void benchmark_bipartition()
 {
+    SetThreadAffinityMask(GetCurrentThread(), 1 << 2);
     // generate dataset and fill with random data
     size_t sz = static_cast<size_t>(1) << 10;
-    size_t iters = 10000000;
+    size_t iters = 4000000;
     int32_t* dst = new int32_t[sz];
     memset(dst, 0, sz);
-    int32_t* src = new int32_t[sz];
+    int32_t* base = new int32_t[sz];
+
+#define ARIF_DATEGEN
+#ifdef ARIF_DATEGEN
+    datagen::Writer<uint32_t> writer;
+    writer.generate((uint32_t*)base, sz, datagen::CONST_RAND, INT32_MAX, 0);
+#else
     std::default_random_engine rng;
     rng.seed(std::random_device{}());
     std::uniform_int_distribution<int32_t> dist(0, INT32_MAX);
-    for (int i = 0; i < sz; i++) src[i] = dist(rng);   
+    for (int i = 0; i < sz; i++) base[i] = dist(rng);   
+#endif
     std::cout << "Generated input dataset.\n";
+    int32_t* src = new int32_t[sz];
 
     int32_t p = INT32_MAX / 2;
-    auto t_start = std::chrono::high_resolution_clock::now();                                               
+    std::chrono::steady_clock::time_point t_start, t_end;
+    double elapsed_time_ms = 0;
     for (int i = 0; i < iters; i++)
+    {
+        memcpy(src, base, sz);
+        t_start = std::chrono::high_resolution_clock::now();                                               
         bipartition_1_i32x8(dst, src, sz, p, _mm256_set1_epi32(p));
-    
-    auto t_end = std::chrono::high_resolution_clock::now();                                                 
-    double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();            
+        t_end = std::chrono::high_resolution_clock::now();                                                 
+        elapsed_time_ms += std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    }
     std::cout << "Partition completed.\n";
     std::cout << " took " << elapsed_time_ms << "ms to partition " << (iters*sz) << " integers\n";           
-    std::cout << " the partition rate = " << (iters*sz) / (elapsed_time_ms * 1000000) << "b integers/s\n";   
+    std::cout << " the partition rate = " << (iters*sz) / (elapsed_time_ms * 1000) << " m integers/s\n";   
 
 }
-

@@ -21,16 +21,16 @@
 
 void benchmark_blacher()
 {
+    SetThreadAffinityMask(GetCurrentThread(), 1 << 2);
     // generate dataset and fill with random data
     size_t sz = static_cast<size_t>(1) << 10;
-    size_t iters = 1000000;
-    int32_t* dst = new int32_t[sz];
-    memset(dst, 0, sz);
+    size_t iters = 4000000;
     int32_t* src = new int32_t[sz];
     int32_t* base = new int32_t[sz];
+#define ARIF_DATAGEN
 #ifdef ARIF_DATAGEN
     datagen::Writer<uint32_t> writer;
-    writer.generate((uint32_t*)base, sz, datagen::MT);
+    writer.generate((uint32_t*)base, sz, datagen::REV_SORTED);
 #else
     std::default_random_engine rng;
     rng.seed(std::random_device{}());
@@ -41,8 +41,8 @@ void benchmark_blacher()
 
     int32_t p = INT32_MAX / 2;
 #undef small
-    int32_t small = INT32_MIN;
-    int32_t big = INT32_MAX;
+    int32_t small = INT32_MAX;
+    int32_t big = INT32_MIN;
     double elapsed_time_ms = 0;
     for (int i = 0; i < iters; i++) {
         memcpy(src, base, sz);
@@ -60,8 +60,8 @@ void benchmark_blacher()
 int main(int argc, char** argv)
 {
     //benchmark_blacher();
-    //benchmark_bipartition();
-    benchmark_buckets();
+    benchmark_bipartition();
+    //benchmark_buckets();
 
 
     //test_buckets(64*4);
